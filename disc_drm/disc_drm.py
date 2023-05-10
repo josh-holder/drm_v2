@@ -14,7 +14,7 @@ from stable_baselines3.common.noise import ActionNoise, VectorizedActionNoise
 from stable_baselines3.common.preprocessing import maybe_transpose
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, RolloutReturn, TrainFreq, TrainFrequencyUnit
 from stable_baselines3.common.utils import get_linear_fn, get_parameters_by_name, is_vectorized_observation, polyak_update, should_collect_more_steps
-from disc_drm.BS_DQN_policies import CnnPolicy, BS_DQNPolicy, MlpPolicy, MultiInputPolicy
+from disc_drm.disc_drm_policies import CnnPolicy, D_DRMPolicy, MlpPolicy, MultiInputPolicy
 from stable_baselines3.common.vec_env import VecEnv, VecNormalize
 from stable_baselines3.common.type_aliases import ReplayBufferSamples
 
@@ -25,9 +25,9 @@ from count_reward_scaling import calc_countbased_reward_scaling
 
 from collections import defaultdict
 
-SelfBS_DQN = TypeVar("SelfBS_DQN", bound="BS_DQN")
+SelfD_DRM = TypeVar("SelfD_DRM", bound="D_DRM")
 
-class BS_DQN(OffPolicyAlgorithm):
+class D_DRM(OffPolicyAlgorithm):
     """
     Deep Q-Network (DQN)
 
@@ -79,7 +79,7 @@ class BS_DQN(OffPolicyAlgorithm):
 
     def __init__(
         self,
-        policy: Union[str, Type[BS_DQNPolicy]],
+        policy: Union[str, Type[D_DRMPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 1e-4,
         buffer_size: int = 1_000_000,  # 1e6
@@ -381,14 +381,14 @@ class BS_DQN(OffPolicyAlgorithm):
         return action, state
 
     def learn(
-        self: SelfBS_DQN,
+        self: SelfD_DRM,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "BS_DQN",
+        tb_log_name: str = "D_DRM",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfBS_DQN:
+    ) -> SelfD_DRM:
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,

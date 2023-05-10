@@ -1,30 +1,25 @@
 import argparse
-import difflib
-import importlib
-import os
 import time
 
-import gym
 import numpy as np
 import stable_baselines3 as sb3
 import torch as th
 
 # Register custom envs
-import rl_zoo3.import_envs  # noqa: F401 pytype: disable=import-error
 from flexible_exp_manager import FlexibleExperimentManager
 from rl_zoo3.utils import ALGOS, StoreDict
-from cont_drm.c_drm import DRM
-from discrete_drm.d_drm import BS_DQN
+from cont_drm.cont_drm import C_DRM
+from disc_drm.disc_drm import D_DRM
 
 from setup_training_utils import add_other_parser_args, env_seed_uuid_setup
 
-def add_parsing_args(parser):
+def setup_and_run_parser(parser):
     #~~~ ALGORITHM SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--algo", help="RL Algorithm", default="drm", type=str, required=False, choices=list(ALGOS.keys()))
+    default_algo = "cont_drm"
+    parser.add_argument("--algo", help="RL Algorithm", default=default_algo, type=str, required=False, choices=list(ALGOS.keys()))
     parser.add_argument("--n-critics",help="Number of critics in ensemble", default=2, type=int)
     parser.add_argument("--use-shaping", help="Flag determining whether to use reward shaping", default=1, type=int)
     parser.add_argument("--use-shaping-scaling", help="Flag determining whether to use DRM scaling on reward shaping", default=1, type=int)
-
 
     #~~~ RUN SPECIFIC ARGUMENTS ~~~#
     parser.add_argument("--env", type=str, default="MountainCarContinuous-v0", help="environment ID")
@@ -43,7 +38,7 @@ def add_parsing_args(parser):
         "-conf",
         "--conf-file",
         type=str,
-        default="drm/drm.yml",
+        default=f"{default_algo}/{default_algo}.yml",
         help="Custom yaml file or python package from which the hyperparameters will be loaded."
         "We expect that python packages contain a dictionary called 'hyperparams' which contains a key for each environment.",
     )
@@ -59,15 +54,24 @@ def add_parsing_args(parser):
     parser.add_argument("--wandb-project-name", type=str, default="DRM MtnCar", help="the wandb's project name")
     parser.add_argument("--wandb-run-name",type=str, default=None, help="the run name to be used in wandb")
 
-    return parser
+    args = parser.parse_args()
+
+    #set default wandb run name if necessary
+    if args.wandb_run_name != None: pass
+    else: args.wandb_run_name = f"{args.env}__{args.algo}__{args.seed}__{int(time.time())}"
+
+    #set default config file if necessary
+    if args.conf_file != None: pass
+    else: args.conf_file = f"{args.algo}/{args.algo}.yml"
+
+    return args
 
 def train() -> None:
     #~~~~~~~~~ SETUP PARSER~~~~~~~~~#
     parser = argparse.ArgumentParser()
-    parser = add_parsing_args(parser)
     parser = add_other_parser_args(parser) #add irrelevant args
 
-    args = parser.parse_args()
+    args = setup_and_run_parser(parser)
 
     #~~~~~~~~~ SETUP ENVIRONMENT, SEED, UUID ~~~~~~~~~#
     args, env_id, uuid_str = env_seed_uuid_setup(args)
@@ -81,12 +85,9 @@ def train() -> None:
                 "if you want to use Weights & Biases to track experiment, please install W&B via `pip install wandb`"
             )
 
-        if args.wandb_run_name != None: run_name = args.wandb_run_name
-        else: run_name = f"{args.env}__{args.algo}__{args.seed}__{int(time.time())}"
-
         tags = args.wandb_tags + [f"v{sb3.__version__}"]
         run = wandb.init(
-            name=run_name,
+            name=args.wandb_run_name,
             project=args.wandb_project_name,
             entity=args.wandb_entity,
             tags=tags,
@@ -99,8 +100,8 @@ def train() -> None:
 
     #Create new algorithm list which includes DRM
     FULL_ALGO_LIST = ALGOS
-    FULL_ALGO_LIST["drm"] = DRM
-    FULL_ALGO_LIST["BS_DQN"] = BS_DQN
+    FULL_ALGO_LIST["cont_drm"] = C_DRM
+    FULL_ALGO_LIST["disc_drm"] = D_DRM
 
     #initialize policy kwargs with n_critics
     policy_kwargs = {}

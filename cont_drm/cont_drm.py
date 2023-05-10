@@ -11,15 +11,15 @@ from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from cont_drm.c_drm_policies import DRMPolicy, CnnPolicy, MlpPolicy, MultiInputPolicy
+from cont_drm.cont_drm_policies import C_DRMPolicy, CnnPolicy, MlpPolicy, MultiInputPolicy
 
 from car_reward_shaping import car_reward_shaping as calc_shaping_rewards
 
-SelfDRM = TypeVar("SelfDRM", bound="DRM")
+SelfC_DRM = TypeVar("SelfC_DRM", bound="C_DRM")
 
-class DRM(OffPolicyAlgorithm):
+class C_DRM(OffPolicyAlgorithm):
     """
-    Dynamic Reward Modification (DRM)
+    Dynamic Reward Modification (C_DRM)
     Addressing Function Approximation Error in Actor-Critic Methods.
 
     Based on stable_baselines TD3 implementation.
@@ -69,7 +69,7 @@ class DRM(OffPolicyAlgorithm):
 
     def __init__(
         self,
-        policy: Union[str, Type[DRMPolicy]],
+        policy: Union[str, Type[C_DRMPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 1e-3,
         buffer_size: int = 1_000_000,  # 1e6
@@ -237,14 +237,14 @@ class DRM(OffPolicyAlgorithm):
         # self.logger.record("train/qs", th.mean(th.mean(single_tensor_current_q_values, dim=1)).item())
 
     def learn(
-        self: SelfDRM,
+        self: SelfC_DRM,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "DRM",
+        tb_log_name: str = "C_DRM",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfDRM:
+    ) -> SelfC_DRM:
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,

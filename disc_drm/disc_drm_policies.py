@@ -18,7 +18,7 @@ import time
 
 class QNetwork(BasePolicy):
     """
-    Action-Value (Q-Value) network for Bootstrapped BS_DQN
+    Action-Value (Q-Value) network for Bootstrapped D_DRM
 
     :param observation_space: Observation space
     :param action_space: Action space
@@ -100,9 +100,9 @@ class QNetwork(BasePolicy):
         )
         return data
 
-class BS_DQNPolicy(BasePolicy):
+class D_DRMPolicy(BasePolicy):
     """
-    Policy class with Q-Value Net and target net for BS_DQN
+    Policy class with Q-Value Net and target net for D_DRM
 
     :param observation_space: Observation space
     :param action_space: Action space
@@ -276,12 +276,12 @@ class BS_DQNPolicy(BasePolicy):
         self.training = mode
 
 
-MlpPolicy = BS_DQNPolicy
+MlpPolicy = D_DRMPolicy
 
 
-class CnnPolicy(BS_DQNPolicy):
+class CnnPolicy(D_DRMPolicy):
     """
-    Policy class for BS_DQN when using images as input.
+    Policy class for D_DRM when using images as input.
 
     :param observation_space: Observation space
     :param action_space: Action space
@@ -324,9 +324,9 @@ class CnnPolicy(BS_DQNPolicy):
         )
 
 
-class MultiInputPolicy(BS_DQNPolicy):
+class MultiInputPolicy(D_DRMPolicy):
     """
-    Policy class for BS_DQN when using dict observations as input.
+    Policy class for D_DRM when using dict observations as input.
 
     :param observation_space: Observation space
     :param action_space: Action space

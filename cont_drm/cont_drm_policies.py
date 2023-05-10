@@ -83,9 +83,9 @@ class Actor(BasePolicy):
         return self(observation)
 
 
-class DRMPolicy(BasePolicy):
+class C_DRMPolicy(BasePolicy):
     """
-    Policy class (with both actor and critic) for DRM.
+    Policy class (with both actor and critic) for C_DRM.
 
     :param observation_space: Observation space
     :param action_space: Action space
@@ -242,10 +242,10 @@ class DRMPolicy(BasePolicy):
         self.training = mode
 
 
-MlpPolicy = DRMPolicy
+MlpPolicy = C_DRMPolicy
 
 
-class CnnPolicy(DRMPolicy):
+class CnnPolicy(C_DRMPolicy):
     """
     Policy class (with both actor and critic) for TD3.
 
@@ -295,9 +295,9 @@ class CnnPolicy(DRMPolicy):
         )
 
 
-class MultiInputPolicy(DRMPolicy):
+class MultiInputPolicy(C_DRMPolicy):
     """
-    Policy class (with both actor and critic) for DRM to be used with Dict observation spaces.
+    Policy class (with both actor and critic) for C_DRM to be used with Dict observation spaces.
 
     :param observation_space: Observation space
     :param action_space: Action space
