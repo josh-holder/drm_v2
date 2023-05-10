@@ -5,7 +5,6 @@ import numpy as np
 import stable_baselines3 as sb3
 import torch as th
 
-# Register custom envs
 from flexible_exp_manager import FlexibleExperimentManager
 from rl_zoo3.utils import ALGOS, StoreDict
 from cont_drm.cont_drm import C_DRM
