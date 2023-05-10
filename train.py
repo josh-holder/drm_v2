@@ -10,6 +10,8 @@ from rl_zoo3.utils import ALGOS, StoreDict
 from cont_drm.cont_drm import C_DRM
 from disc_drm.disc_drm import D_DRM
 
+from stable_baselines3.common.vec_env import VecVideoRecorder, DummyVecEnv
+
 from setup_training_utils import add_other_parser_args, env_seed_uuid_setup
 
 def setup_and_run_parser(parser):
@@ -164,8 +166,6 @@ def train() -> None:
             exp_manager.save_trained_model(model)
     else:
         exp_manager.hyperparameters_optimization()
-
-    
 
 if __name__ == "__main__":
     train()
