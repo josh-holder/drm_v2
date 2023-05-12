@@ -16,7 +16,6 @@ from stable_baselines3.common.torch_layers import (
 )
 from stable_baselines3.common.type_aliases import Schedule
 
-
 class Actor(BasePolicy):
     """
     Actor network (policy) for TD3.
@@ -101,7 +100,7 @@ class C_DRMPolicy(BasePolicy):
         ``th.optim.Adam`` by default
     :param optimizer_kwargs: Additional keyword arguments,
         excluding the learning rate, to pass to the optimizer
-    :param n_critics: Number of critic networks to create.
+    :param n_qnets: Number of critic networks to create.
     :param share_features_extractor: Whether to share or not the features extractor
         between the actor and the critic (this saves computation time)
     """
@@ -111,7 +110,7 @@ class C_DRMPolicy(BasePolicy):
         observation_space: spaces.Space,
         action_space: spaces.Space,
         lr_schedule: Schedule,
-        n_critics: int = 10,
+        n_qnets: int = 2,
         net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
         activation_fn: Type[nn.Module] = nn.ReLU,
         features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
@@ -154,7 +153,7 @@ class C_DRMPolicy(BasePolicy):
         self.critic_kwargs = self.net_args.copy()
         self.critic_kwargs.update(
             {
-                "n_critics": n_critics,
+                "n_qnets": n_qnets,
                 "net_arch": critic_arch,
                 "share_features_extractor": share_features_extractor,
             }
@@ -202,7 +201,7 @@ class C_DRMPolicy(BasePolicy):
             dict(
                 net_arch=self.net_arch,
                 activation_fn=self.net_args["activation_fn"],
-                n_critics=self.critic_kwargs["n_critics"],
+                n_critics=self.critic_kwargs["n_qnets"],
                 lr_schedule=self._dummy_schedule,  # dummy lr schedule, not needed for loading policy alone
                 optimizer_class=self.optimizer_class,
                 optimizer_kwargs=self.optimizer_kwargs,
@@ -276,7 +275,7 @@ class CnnPolicy(C_DRMPolicy):
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
-        n_critics: int = 10,
+        n_qnets: int = 2,
         share_features_extractor: bool = False,
     ):
         super().__init__(
@@ -290,7 +289,7 @@ class CnnPolicy(C_DRMPolicy):
             normalize_images,
             optimizer_class,
             optimizer_kwargs,
-            n_critics,
+            n_qnets,
             share_features_extractor,
         )
 
@@ -313,7 +312,7 @@ class MultiInputPolicy(C_DRMPolicy):
         ``th.optim.Adam`` by default
     :param optimizer_kwargs: Additional keyword arguments,
         excluding the learning rate, to pass to the optimizer
-    :param n_critics: Number of critic networks to create.
+    :param n_qnets: Number of critic networks to create.
     :param share_features_extractor: Whether to share or not the features extractor
         between the actor and the critic (this saves computation time)
     """
@@ -330,7 +329,7 @@ class MultiInputPolicy(C_DRMPolicy):
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
-        n_critics: int = 10,
+        n_qnets: int = 10,
         share_features_extractor: bool = False,
     ):
         super().__init__(
@@ -344,6 +343,6 @@ class MultiInputPolicy(C_DRMPolicy):
             normalize_images,
             optimizer_class,
             optimizer_kwargs,
-            n_critics,
+            n_qnets,
             share_features_extractor,
         )

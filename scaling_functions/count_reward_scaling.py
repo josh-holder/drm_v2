@@ -1,6 +1,6 @@
 import torch as th
 
-def calc_countbased_reward_scaling(count_dict, count_temp, states, actions):
+def countbased_reward_scaling(count_dict, count_temp, states, actions):
     scaling = th.ones_like(states, dtype=th.float32)
 
     for i, (state, action) in enumerate(zip(states, actions)):

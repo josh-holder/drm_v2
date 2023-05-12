@@ -18,10 +18,7 @@ from disc_drm.disc_drm_policies import CnnPolicy, D_DRMPolicy, MlpPolicy, MultiI
 from stable_baselines3.common.vec_env import VecEnv, VecNormalize
 from stable_baselines3.common.type_aliases import ReplayBufferSamples
 
-# from cliff_reward_shaping import calc_cliff_shaping_rewards as calc_shaping_rewards
-# from lunar_lander_reward_shaping import calc_shaping_rewards
-from lake_reward_shaping import calc_lake_shaping_rewards as calc_shaping_rewards
-from count_reward_scaling import calc_countbased_reward_scaling
+from scaling_functions.count_reward_scaling import countbased_reward_scaling
 
 from collections import defaultdict
 
@@ -105,10 +102,9 @@ class D_DRM(OffPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
         n_qnets: int = 2,
-        use_shaping: int = 1,
-        use_shaping_scaling: int = 1,
+        shaping_function = None,
+        shaping_scaling_type: str = None,
         count_temp: int = 1,
-        bootstrap_pct: float = 1.0,
     ):
         super().__init__(
             policy,
@@ -148,8 +144,8 @@ class D_DRM(OffPolicyAlgorithm):
         self.exploration_schedule = None
         self.q_nets, self.q_net_targets = None, None
 
-        self.use_shaping = use_shaping
-        self.use_shaping_scaling = use_shaping_scaling
+        self.shaping_function = shaping_function
+        self.shaping_scaling_type = shaping_scaling_type
 
         self.max_q_stds = 0.0001 #start at non-zero value to prevent divide by zero
 
@@ -159,9 +155,6 @@ class D_DRM(OffPolicyAlgorithm):
 
         self.count_temp = count_temp
         self.state_counts = defaultdict(int)
-
-        self.replay_buffer_class = BootstrapReplayBuffer
-        self.bootstrap_pct = bootstrap_pct
 
         if _init_setup_model:
             self._setup_model()
@@ -189,21 +182,6 @@ class D_DRM(OffPolicyAlgorithm):
                 )
 
             self.target_update_interval = max(self.target_update_interval // self.n_envs, 1)
-
-        #Overwrite replay buffer which accepts bootstrapping
-        # Make a local copy as we should not pickle
-        # the environment when using HerReplayBuffer
-        replay_buffer_kwargs = self.replay_buffer_kwargs.copy()
-        self.replay_buffer = self.replay_buffer_class(
-            self.buffer_size,
-            self.observation_space,
-            self.action_space,
-            device=self.device,
-            n_envs=self.n_envs,
-            optimize_memory_usage=self.optimize_memory_usage,
-            bootstrap_pct=self.bootstrap_pct,
-            **replay_buffer_kwargs,  # pytype:disable=wrong-keyword-args
-        )
 
     def _create_aliases(self) -> None:
         self.q_nets = self.policy.q_nets
@@ -270,38 +248,41 @@ class D_DRM(OffPolicyAlgorithm):
                 if avg_batch_q_diff > self.max_q_stds:
                     self.max_q_stds = avg_batch_q_diff
 
-                #Calculate appropriate reward scaling
-                if self.use_shaping:
-                    if self.use_shaping_scaling:
-                        if self._n_updates < self.shaping_starts:
-                            shaping_reward_scaling = th.ones_like(q_stds_for_batch)
-                        else:
-                            # shaping_reward_scaling = self._current_progress_remaining*th.ones_like(q_stds_for_batch) #naive scaling
-                            if self.count_temp < 0:
-                                shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_q_stds, th.ones_like(q_stds_for_batch))
-                            else:
-                                shaping_reward_scaling = th.minimum(calc_countbased_reward_scaling(self.state_counts, self.count_temp, replay_data.observations, replay_data.actions), th.ones_like(q_stds_for_batch))
-                    else:
-                        shaping_reward_scaling = th.ones_like(q_stds_for_batch)    
-                else:
-                    shaping_reward_scaling = th.zeros_like(q_stds_for_batch)
+                #################### Calculate appropriate reward shaping and scaling ################
+                if self.shaping_function != None:
+                    shaping_rewards = self.shaping_function(replay_data.observations, replay_data.actions)
 
-                #Apply shaping reward scaling (zero if unshaped, one if shaped without scaling)
-                shaping_rewards = calc_shaping_rewards(replay_data.observations,replay_data.actions)
-                shaping_rewards = th.mul(shaping_reward_scaling, shaping_rewards)
+                    if self.shaping_scaling_type == None:
+                        shaping_reward_scaling = th.ones_like(shaping_rewards,dtype=th.float16)
 
-                # target_q_values = replay_data.rewards + shaping_rewards + (1 - replay_data.dones) * self.gamma * greedy_next_qvals
-                target_q_values = th.where(replay_data.bootstrap_flags.bool(),replay_data.rewards + shaping_rewards + (1 - replay_data.dones) * self.gamma * greedy_next_qvals, 0)
+                    elif self.shaping_scaling_type == "count":
+                        shaping_reward_scaling = countbased_reward_scaling(self.state_counts, self.count_temp, replay_data.observations, replay_data.actions)
+                        shaping_reward_scaling = th.minimum(shaping_reward_scaling, th.ones_like(shaping_reward_scaling))
+
+                    elif self.shaping_scaling_type == "drm":
+                        shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_q_stds, th.ones_like(q_stds_for_batch))
+
+                    elif self.shaping_scaling_type == "rnd":
+                        print("RND not implemented yet")
+                        raise NotImplementedError
+                    
+                    elif self.shaping_scaling_type == "naive":
+                        shaping_reward_scaling = self._current_progress_remaining*th.ones_like(q_stds_for_batch)
+                    
+                    reward_scalings.append(shaping_reward_scaling.mean().item())
+                    
+                    shaping_rewards = th.mul(shaping_rewards, shaping_reward_scaling)
+
+                else: #if no shaping function provided, just use the regular rewards
+                    shaping_reward_scaling = th.zeros_like(replay_data.rewards)
+                    shaping_rewards = th.zeros_like(replay_data.rewards)
+
+                target_q_values = replay_data.rewards + shaping_rewards + (1 - replay_data.dones) * self.gamma * greedy_next_qvals
 
                 reward_scalings.append(shaping_reward_scaling.mean().item())
 
-            #set current q values to zero where bootstrap flag is false
-            for i, current_q_val in enumerate(current_q_values):
-                current_q_values[i] = th.where(replay_data.bootstrap_flags.bool()[:,i].unsqueeze(1), current_q_val, 0)
-
             # Compute Huber loss (less sensitive to outliers)
             losses_for_ensemble = [F.smooth_l1_loss(current_q_val, target_q_values[:,i].unsqueeze(1)) for i, current_q_val in enumerate(current_q_values)]
-            
             losses.append((sum(losses_for_ensemble)/len(losses_for_ensemble)).item())
 
             # Optimize the policy
@@ -320,35 +301,10 @@ class D_DRM(OffPolicyAlgorithm):
         # self.logger.record("train/max_avg_rnd_std", self.max_avg_rnd_loss)
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/loss", np.mean(losses))
-        # if self.use_shaping and self.use_shaping_scaling:
-        self.logger.record("train/reward_scale", np.mean(reward_scalings))
         self.logger.record("train/qstds", np.mean(q_stds_for_all_batches))
         self.logger.record("train/max_qstds", self.max_q_stds)
 
-        with th.no_grad():
-            #calculate gate value over time
-            avg_gate_value = 0
-            gate_obs = th.tensor([35])
-            gate_action = th.tensor([2]).unsqueeze(0)
-            for q_net in self.q_nets.q_networks:
-                vals = q_net(self.q_nets.extract_features(gate_obs, self.q_nets.features_extractor))
-                avg_gate_value += vals[0,2].item()
-            avg_gate_value /= len(self.q_nets.q_networks)
-            self.logger.record("train/gate_value", avg_gate_value)
-
-            #calculate gate std over time
-            gate_q_values = self.q_nets(gate_obs)
-            # Retrieve the q-values for the actions from the replay buffer
-            gate_q_values = [th.gather(gate_q_val, dim=1, index=gate_action) for gate_q_val in gate_q_values]
-            single_tensor_gate_q_values = th.cat(gate_q_values, dim=1)
-            gate_std = th.std(single_tensor_gate_q_values, dim=1, correction=0, keepdim=True)
-            self.logger.record("train/gate_std_shaping", min(gate_std.item()/self.max_q_stds,1))
-
-            #calculate gate count shaping over time
-            logging_count_temp = self.count_temp if self.count_temp >= 0 else 1
-            count_scaling = calc_countbased_reward_scaling(self.state_counts, logging_count_temp, gate_obs, gate_action)
-            self.logger.record("train/gate_count_shaping", count_scaling.item())
-
+        if self.shaping_function != None: self.logger.record("train/reward_scale", np.mean(reward_scalings))
 
     def predict(
         self,
@@ -515,102 +471,3 @@ class D_DRM(OffPolicyAlgorithm):
         callback.on_rollout_end()
 
         return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training)
-
-
-class BootstrapReplayBuffer(ReplayBuffer):
-    """
-    Replay buffer, but with bootstrapping flags so not all q functions get all data
-    """
-    def __init__(
-        self,
-        buffer_size: int,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
-        device: Union[th.device, str] = "auto",
-        n_envs: int = 1,
-        optimize_memory_usage: bool = False,
-        handle_timeout_termination: bool = True,
-        n_qnets: int = 2,
-        bootstrap_pct: float = 1.0,
-    ):
-        super().__init__(buffer_size, observation_space, action_space, device, n_envs, optimize_memory_usage, handle_timeout_termination)
-
-        self.n_qnets = n_qnets
-        self.bootstrap_pct = bootstrap_pct
-
-        self.bootstrap_flags = th.zeros((self.buffer_size, self.n_qnets, self.n_envs), dtype=th.int8)
-
-    def add(
-        self,
-        obs: np.ndarray,
-        next_obs: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        infos: List[Dict[str, Any]],
-    ) -> None:
-        # Reshape needed when using multiple envs with discrete observations
-        # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
-        if isinstance(self.observation_space, spaces.Discrete):
-            obs = obs.reshape((self.n_envs, *self.obs_shape))
-            next_obs = next_obs.reshape((self.n_envs, *self.obs_shape))
-
-        # Same, for actions
-        action = action.reshape((self.n_envs, self.action_dim))
-
-        # Copy to avoid modification by reference
-        self.observations[self.pos] = np.array(obs).copy()
-
-        if self.optimize_memory_usage:
-            self.observations[(self.pos + 1) % self.buffer_size] = np.array(next_obs).copy()
-        else:
-            self.next_observations[self.pos] = np.array(next_obs).copy()
-
-        self.actions[self.pos] = np.array(action).copy()
-        self.rewards[self.pos] = np.array(reward).copy()
-        self.dones[self.pos] = np.array(done).copy()
-
-        #generate random flag for each q function
-        random_bootstrap_vals = th.rand((self.n_qnets, self.n_envs))
-        self.bootstrap_flags[self.pos] = th.where(random_bootstrap_vals < self.bootstrap_pct, 1, 0)
-
-        if self.handle_timeout_termination:
-            self.timeouts[self.pos] = np.array([info.get("TimeLimit.truncated", False) for info in infos])
-
-        self.pos += 1
-        if self.pos == self.buffer_size:
-            self.full = True
-            self.pos = 0
-
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None): #-> BootstrapReplayBufferSamples:
-        # Sample randomly the env idx
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
-
-        if self.optimize_memory_usage:
-            next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, env_indices, :], env)
-        else:
-            next_obs = self._normalize_obs(self.next_observations[batch_inds, env_indices, :], env)
-
-        data = (
-            self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
-            self.actions[batch_inds, env_indices, :],
-            next_obs,
-            # Only use dones that are not due to timeouts
-            # deactivated by default (timeouts is initialized as an array of False)
-            (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
-            self._normalize_reward(self.rewards[batch_inds, env_indices].reshape(-1, 1), env),
-        )
-        return BootstrapReplayBufferSamples(ReplayBufferSamples(*tuple(map(self.to_torch, data))), self.bootstrap_flags[batch_inds, :, env_indices])
-
-class BootstrapReplayBufferSamples(object):
-    """
-    The normal ReplayBufferSamples object doesn't have the bootstrap flags field.
-    We initialize a very similar object with all the same attributes, just with the bootstrap flags field added.
-    """
-    def __init__(self, regular_replay_buffer, bootstrap_flags):
-        self.observations = regular_replay_buffer.observations
-        self.actions = regular_replay_buffer.actions
-        self.next_observations = regular_replay_buffer.next_observations
-        self.dones = regular_replay_buffer.dones
-        self.rewards = regular_replay_buffer.rewards
-        self.bootstrap_flags = bootstrap_flags

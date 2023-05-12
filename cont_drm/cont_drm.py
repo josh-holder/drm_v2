@@ -13,8 +13,6 @@ from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedul
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from cont_drm.cont_drm_policies import C_DRMPolicy, CnnPolicy, MlpPolicy, MultiInputPolicy
 
-from car_reward_shaping import car_reward_shaping as calc_shaping_rewards
-
 SelfC_DRM = TypeVar("SelfC_DRM", bound="C_DRM")
 
 class C_DRM(OffPolicyAlgorithm):
@@ -92,8 +90,8 @@ class C_DRM(OffPolicyAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
-        use_shaping: int = 1,
-        use_shaping_scaling: int = 1,
+        shaping_function = None,
+        shaping_scaling_type: str = None,
     ):
         super().__init__(
             policy,
@@ -123,8 +121,9 @@ class C_DRM(OffPolicyAlgorithm):
         self.policy_delay = policy_delay
         self.target_noise_clip = target_noise_clip
         self.target_policy_noise = target_policy_noise
-        self.use_shaping = use_shaping
-        self.use_shaping_scaling = use_shaping_scaling
+
+        self.shaping_function = shaping_function
+        self.shaping_scaling_type = shaping_scaling_type
 
         self.max_avg_batch_q_stds = 0
 
@@ -172,7 +171,7 @@ class C_DRM(OffPolicyAlgorithm):
                 next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
 
                 m = 2
-                critic_indices_to_use = np.random.choice(self.critic.n_critics, m, replace=False)
+                critic_indices_to_use = np.random.choice(self.critic.n_qnets, m, replace=False)
 
                 # Compute the next Q-values: min over a random selection of m of the critics.
                 next_q_values = []

@@ -66,8 +66,8 @@ class FlexibleExperimentManager(ExperimentManager):
         config: Optional[str] = None,
         show_progress: bool = False,
         policy_kwargs: Optional[Dict[str, Any]] = None,
-        use_shaping: int = 1,
-        use_shaping_scaling: int = 1,
+        shaping_function = None,
+        shaping_scaling_type: str = None,
     ):
         super().__init__(args,
             algo,
@@ -106,9 +106,9 @@ class FlexibleExperimentManager(ExperimentManager):
             show_progress)
         self.FULL_ALGO_LIST = FULL_ALGO_LIST
         self.policy_kwargs = policy_kwargs
-        self.use_shaping = use_shaping
-        self.use_shaping_scaling = use_shaping_scaling
-
+        
+        self.shaping_function = shaping_function
+        self.shaping_scaling_type = shaping_scaling_type
 
     def setup_experiment(self) -> Optional[Tuple[BaseAlgorithm, Dict[str, Any]]]:
         """
@@ -129,8 +129,8 @@ class FlexibleExperimentManager(ExperimentManager):
 
         self._hyperparams = self._preprocess_action_noise(hyperparams, saved_hyperparams, env)
 
-        self._hyperparams["use_shaping"] = self.use_shaping
-        self._hyperparams["use_shaping_scaling"] = self.use_shaping_scaling
+        self._hyperparams["shaping_function"] = self.shaping_function
+        self._hyperparams["shaping_scaling_type"] = self.shaping_scaling_type
 
         if self.continue_training:
             model = self._load_pretrained_agent(self._hyperparams, env)

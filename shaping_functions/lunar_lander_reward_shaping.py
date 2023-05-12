@@ -17,7 +17,7 @@
 import numpy as np
 import torch as th
 
-def calc_shaping_rewards(state, action):
+def lander_reward_shaping(state, action):
 	"""
 	calculate the action the heuristic would choose, based on https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py
 	Then, compare that to the chosen action and assign a shaping reward to the agent

@@ -1,6 +1,6 @@
 import torch as th
 
-def calc_lake_shaping_rewards(state, action):
+def lake_reward_shaping(state, action):
     shaped_states = th.zeros_like(state)
 
     # push_right_states =  [20, 21, 42, 43, 24, 25, 26, 7, 8, 9, 10, 11, 12, 13, 14, 15, 96, 97, 98, 277, 278, 357, 358]

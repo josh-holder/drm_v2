@@ -10,17 +10,33 @@ from rl_zoo3.utils import ALGOS, StoreDict
 from cont_drm.cont_drm import C_DRM
 from disc_drm.disc_drm import D_DRM
 
+import os
+import gym
+
 from stable_baselines3.common.vec_env import VecVideoRecorder, DummyVecEnv
 
 from setup_training_utils import add_other_parser_args, env_seed_uuid_setup
 
+from shaping_functions.car_reward_shaping import car_reward_shaping
+from shaping_functions.lunar_lander_reward_shaping import lander_reward_shaping
+from shaping_functions.lake_reward_shaping import lake_reward_shaping
+from shaping_functions.cliff_reward_shaping import cliff_reward_shaping
+
+#Create new algorithm list which includes DRM
+FULL_ALGO_LIST = ALGOS
+FULL_ALGO_LIST["cont_drm"] = C_DRM
+FULL_ALGO_LIST["disc_drm"] = D_DRM
+
+SHAPING_SCALING_TYPES = ["count", "drm", "naive", "rnd"]
+ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v0":lake_reward_shaping, \
+                         "LunarLander-v2":lander_reward_shaping, "MountainCarContinuous-v0":car_reward_shaping}
+
 def setup_and_run_parser(parser):
     #~~~ ALGORITHM SPECIFIC ARGUMENTS ~~~#
-    default_algo = "cont_drm"
-    parser.add_argument("--algo", help="RL Algorithm", default=default_algo, type=str, required=False, choices=list(ALGOS.keys()))
-    parser.add_argument("--n-critics",help="Number of critics in ensemble", default=2, type=int)
-    parser.add_argument("--use-shaping", help="Flag determining whether to use reward shaping", default=1, type=int)
-    parser.add_argument("--use-shaping-scaling", help="Flag determining whether to use DRM scaling on reward shaping", default=1, type=int)
+    parser.add_argument("--algo", help="RL Algorithm", default="disc_drm", type=str, required=False, choices=list(FULL_ALGO_LIST.keys()))
+    parser.add_argument("--n-qnets",help="Number of Q-networks in ensemble", default=2, type=int)
+    parser.add_argument("--scaling", help="Shaping scaling type", default=None, type=str, required=False, choices=SHAPING_SCALING_TYPES)
+    parser.add_argument("--no-shaping", action="store_true", help="Flag determining whether to use reward shaping.", default=False)
 
     #~~~ RUN SPECIFIC ARGUMENTS ~~~#
     parser.add_argument("--env", type=str, default="MountainCarContinuous-v0", help="environment ID")
@@ -39,7 +55,7 @@ def setup_and_run_parser(parser):
         "-conf",
         "--conf-file",
         type=str,
-        default=f"{default_algo}/{default_algo}.yml",
+        default=None,
         help="Custom yaml file or python package from which the hyperparameters will be loaded."
         "We expect that python packages contain a dictionary called 'hyperparams' which contains a key for each environment.",
     )
@@ -51,9 +67,11 @@ def setup_and_run_parser(parser):
         default=False,
         help="if toggled, this experiment will be tracked with Weights and Biases",
     )
-    parser.add_argument("-f", "--log-folder", help="Log folder", type=str, default="logs")
-    parser.add_argument("--wandb-project-name", type=str, default="DRM MtnCar", help="the wandb's project name")
+    parser.add_argument("--wandb-project-name", type=str, default="Discrete DRM", help="the wandb's project name")
     parser.add_argument("--wandb-run-name",type=str, default=None, help="the run name to be used in wandb")
+
+    parser.add_argument("-f", "--log-folder", help="Log folder", type=str, default="logs")
+    parser.add_argument("--video", action="store_true", default=False, help="Flag determining whether to save a video at the end of training")
 
     args = parser.parse_args()
 
@@ -62,8 +80,8 @@ def setup_and_run_parser(parser):
     else: args.wandb_run_name = f"{args.env}__{args.algo}__{args.seed}__{int(time.time())}"
 
     #set default config file if necessary
-    if args.conf_file != None: pass
-    else: args.conf_file = f"{args.algo}/{args.algo}.yml"
+    if args.conf_file == None: args.conf_file = f"{args.algo}/{args.algo}.yml"
+    else: pass
 
     return args
 
@@ -76,6 +94,12 @@ def train() -> None:
 
     #~~~~~~~~~ SETUP ENVIRONMENT, SEED, UUID ~~~~~~~~~#
     args, env_id, uuid_str = env_seed_uuid_setup(args)
+
+    #~~~~~~~~~ SETUP REWARD SHAPING ~~~~~~~~~#
+    if args.no_shaping: shaping_function = None
+    else: 
+        try: shaping_function = ENV_SHAPING_FUNCTIONS[env_id]
+        except KeyError: raise KeyError(f"Environment {env_id} does not have a reward shaping function implemented.")
 
     #~~~~~~~~~ SETUP W&B ~~~~~~~~~#
     if args.track:
@@ -97,16 +121,11 @@ def train() -> None:
             monitor_gym=True,  # auto-upload the videos of agents playing the game
             save_code=True,  # optional
         )
-        args.tensorboard_log = f"runs/{run_name}"
+        args.tensorboard_log = f"runs/{args.wandb_run_name}"
 
-    #Create new algorithm list which includes DRM
-    FULL_ALGO_LIST = ALGOS
-    FULL_ALGO_LIST["cont_drm"] = C_DRM
-    FULL_ALGO_LIST["disc_drm"] = D_DRM
-
-    #initialize policy kwargs with n_critics
+    #initialize policy kwargs with algorithm specific arguments
     policy_kwargs = {}
-    policy_kwargs['n_critics'] = args.n_critics
+    policy_kwargs['n_qnets'] = args.n_qnets
 
     exp_manager = FlexibleExperimentManager(
         args,
@@ -146,8 +165,8 @@ def train() -> None:
         config=args.conf_file,
         show_progress=args.progress,
         policy_kwargs=policy_kwargs,
-        use_shaping=args.use_shaping,
-        use_shaping_scaling=args.use_shaping_scaling,
+        shaping_function=shaping_function,
+        shaping_scaling_type=args.scaling,
     )
 
     # Prepare experiment and launch hyperparameter optimization if needed
@@ -166,6 +185,28 @@ def train() -> None:
             exp_manager.save_trained_model(model)
     else:
         exp_manager.hyperparameters_optimization()
+
+    #SAVE VIDEOS (only for discrete environments)
+    if args.video and args.algo == "disc_drm":
+        vid_folder = os.path.join(args.log_folder, "videos")
+        os.makedirs(vid_folder, exist_ok=True)
+        video_length = 100
+
+        vec_env = gym.make(env_id)
+
+        # Record the video starting at the first step
+        vec_env = VecVideoRecorder(vec_env, vid_folder,
+                            record_video_trigger=lambda x: x == 0, video_length=video_length,
+                            name_prefix=f"{args.wandb_run_name}_vid")
+
+        obs = vec_env.reset() 
+
+        vec_env.reset()
+        for _ in range(video_length + 1):
+            action = model.policy.predict(obs)
+            obs, _, _, _ = vec_env.step(action[0])
+        # Save the video
+        vec_env.close()
 
 if __name__ == "__main__":
     train()
