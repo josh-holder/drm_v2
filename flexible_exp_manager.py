@@ -22,6 +22,11 @@ from rl_zoo3.utils import get_callback_list
 from rl_zoo3.exp_manager import ExperimentManager
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Type
 
+import numpy as np
+import gym
+
+LAKE_DESC = ["FFFFFFFFFHFFFFF","FFFFFFFFFHFFFFF","FFHFFFFFFHFFGFF","FFHFFFFFFFFFFFF","FFHHFFFFFHFFFFF","FFFFSFFFFHFFFFF","FFFFFFFFFHFFFFF"]
+
 class FlexibleExperimentManager(ExperimentManager):
     """
     Experiment Manager, but with the capability to easily add new algorithms to the list of available algorithms.
@@ -127,6 +132,10 @@ class FlexibleExperimentManager(ExperimentManager):
         n_envs = 1 if self.algo == "ars" or self.optimize_hyperparameters else self.n_envs
         env = self.create_envs(n_envs, no_log=False)
 
+        if self.env_name == "FrozenLake-v1":
+            env = gym.make("FrozenLake-v1", desc=LAKE_DESC, is_slippery=False)
+            env = LakeRewardWrapper(env, -0.01, 0)
+
         self._hyperparams = self._preprocess_action_noise(hyperparams, saved_hyperparams, env)
 
         self._hyperparams["shaping_function"] = self.shaping_function
@@ -199,6 +208,10 @@ class FlexibleExperimentManager(ExperimentManager):
 
         n_envs = 1 if self.algo == "ars" else self.n_envs
         env = self.create_envs(n_envs, no_log=True)
+
+        if self.env_name == "FrozenLake-v1":
+            env = gym.make("FrozenLake-v1", desc=LAKE_DESC, is_slippery=False)
+            env = LakeRewardWrapper(env, -0.01, 0)
 
         # By default, do not activate verbose output to keep
         # stdout clean with only the trials results
@@ -273,3 +286,27 @@ class FlexibleExperimentManager(ExperimentManager):
             raise optuna.exceptions.TrialPruned()
 
         return reward
+    
+class LakeRewardWrapper(gym.Wrapper):
+    def __init__(self, env, negative_step_reward, negative_hole_reward):
+        super().__init__(env)
+        self.negative_step_reward = negative_step_reward
+        self.negative_hole_reward = negative_hole_reward
+
+        self.hole_list = []
+        for i in range(self.env.env.desc.shape[0]):
+            for j in range(self.env.env.desc.shape[1]):
+                if self.env.env.desc[i,j] == b'H':
+                    self.hole_list.append(i*self.env.env.desc.shape[1] + j)
+
+    def step(self, action):
+        last_state = self.env.env.s
+        obs, reward, done, info = self.env.step(action)
+        reward += self.negative_step_reward
+        if obs in self.hole_list:
+            reward += self.negative_hole_reward
+            done = False
+            obs = last_state
+            self.env.env.s = last_state
+
+        return obs, reward, done, info

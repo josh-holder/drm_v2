@@ -28,7 +28,7 @@ FULL_ALGO_LIST["cont_drm"] = C_DRM
 FULL_ALGO_LIST["disc_drm"] = D_DRM
 
 SHAPING_SCALING_TYPES = ["count", "drm", "naive", "rnd"]
-ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v0":lake_reward_shaping, \
+ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1":lake_reward_shaping, \
                          "LunarLander-v2":lander_reward_shaping, "MountainCarContinuous-v0":car_reward_shaping}
 
 def setup_and_run_parser(parser):
@@ -39,7 +39,7 @@ def setup_and_run_parser(parser):
     parser.add_argument("--no-shaping", action="store_true", help="Flag determining whether to use reward shaping.", default=False)
 
     #~~~ RUN SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--env", type=str, default="MountainCarContinuous-v0", help="environment ID")
+    parser.add_argument("--env", type=str, default="FrozenLake-v1", help="environment ID")
 
     parser.add_argument("-n", "--n-timesteps", help="Overwrite the number of timesteps", default=-1, type=int)
     parser.add_argument("--seed", help="Random generator seed", type=int, default=-1)

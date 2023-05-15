@@ -309,6 +309,7 @@ class CnnPolicy(D_DRMPolicy):
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        n_qnets: int = 1,
     ):
         super().__init__(
             observation_space,
@@ -321,6 +322,7 @@ class CnnPolicy(D_DRMPolicy):
             normalize_images,
             optimizer_class,
             optimizer_kwargs,
+            n_qnets=n_qnets,
         )
 
 
@@ -354,6 +356,7 @@ class MultiInputPolicy(D_DRMPolicy):
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        n_qnets: int = 1,
     ):
         super().__init__(
             observation_space,
@@ -366,4 +369,5 @@ class MultiInputPolicy(D_DRMPolicy):
             normalize_images,
             optimizer_class,
             optimizer_kwargs,
+            n_qnets=n_qnets,
         )
