@@ -116,4 +116,4 @@ FrozenLake-v1:
   exploration_final_eps: 0.1
   policy_kwargs: "dict(net_arch=[256, 256])"
   tau: 0.5
-  count_temp: -1
+  count_temp: 1

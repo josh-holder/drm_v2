@@ -5,7 +5,7 @@ import numpy as np
 import stable_baselines3 as sb3
 import torch as th
 
-from flexible_exp_manager import FlexibleExperimentManager
+from flexible_exp_manager import FlexibleExperimentManager, LakeRewardWrapper, LAKE_DESC
 from rl_zoo3.utils import ALGOS, StoreDict
 from cont_drm.cont_drm import C_DRM
 from disc_drm.disc_drm import D_DRM
@@ -192,7 +192,7 @@ def train() -> None:
         os.makedirs(vid_folder, exist_ok=True)
         video_length = 100
 
-        vec_env = gym.make(env_id)
+        vec_env = DummyVecEnv([lambda: LakeRewardWrapper(gym.make(env_id,desc=LAKE_DESC,is_slippery=False),-0.01,0)])
 
         # Record the video starting at the first step
         vec_env = VecVideoRecorder(vec_env, vid_folder,
@@ -200,6 +200,7 @@ def train() -> None:
                             name_prefix=f"{args.wandb_run_name}_vid")
 
         obs = vec_env.reset() 
+
 
         vec_env.reset()
         for _ in range(video_length + 1):
