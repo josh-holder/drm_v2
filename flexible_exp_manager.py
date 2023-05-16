@@ -25,13 +25,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Type
 import numpy as np
 import gym
 
-LAKE_DESC = ["FFFFFFFHFFFFF",
-             "FFFFFFFHFFFFF",
-             "FFHFFFFHFFGFF",
-             "FFHFFFFFFFFFF",
-             "FFHHFFFHFFFFF",
-             "FFFFSFFHFFFFF",
-             "FFFFFFFHFFFFF"]
+LAKE_DESC = ["FFHFFFFFFFFHFFFFF",
+             "FFHFFFFFFFFHFFFFF",
+             "FFHFFFHFFFFHFFGFF",
+             "FFHFFFHFFFFFFFFFF",
+             "FFFSFFHHFFFHFFFFF",
+             "FHFFFFFFFFFHFFFFF",
+             "FFFFFFFFFFFHFFFFF"]
 
 class FlexibleExperimentManager(ExperimentManager):
     """
