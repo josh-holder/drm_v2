@@ -111,7 +111,6 @@ InvertedPendulumSwingupBulletEnv-v0:
   <<: *pybullet-defaults
   n_timesteps: !!float 3e5
 
-
 MinitaurBulletEnv-v0:
   n_timesteps: !!float 1e6
   policy: 'MlpPolicy'

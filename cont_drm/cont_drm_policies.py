@@ -197,6 +197,10 @@ class C_DRMPolicy(BasePolicy):
         #Create RND networks
         self.rnd_target = self.make_rnd_network(features_extractor=None)
         self.rnd_learner = self.make_rnd_network(features_extractor=None)
+        
+        for target_params, learner_params in zip(self.rnd_target.parameters(), self.rnd_learner.parameters()):
+            print(target_params-learner_params)
+
         self.rnd_learner.optimizer = self.optimizer_class(self.rnd_learner.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
         
         self.rnd_target.set_training_mode(False)
@@ -237,6 +241,7 @@ class C_DRMPolicy(BasePolicy):
         rnd_kwargs.pop('action_space')
         rnd_kwargs.pop('n_qnets')
         rnd_kwargs.pop('share_features_extractor')
+        rnd_kwargs['net_arch'] = [64,64]
         return ContinuousRNDNetwork(**rnd_kwargs).to(self.device)
 
     def forward(self, observation: th.Tensor, deterministic: bool = False) -> th.Tensor:
