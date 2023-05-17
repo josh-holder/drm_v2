@@ -148,6 +148,7 @@ class D_DRM(OffPolicyAlgorithm):
         self.shaping_scaling_type = shaping_scaling_type
 
         self.max_q_stds = 0.0001 #start at non-zero value to prevent divide by zero
+        self.max_avg_rnd_diff = 0.00001
 
         self.n_qnets = n_qnets
 
@@ -186,6 +187,8 @@ class D_DRM(OffPolicyAlgorithm):
     def _create_aliases(self) -> None:
         self.q_nets = self.policy.q_nets
         self.q_net_targets = self.policy.q_net_targets
+        self.rnd_target = self.policy.rnd_target
+        self.rnd_learner = self.policy.rnd_learner
 
     def _on_step(self) -> None:
         """
@@ -207,7 +210,7 @@ class D_DRM(OffPolicyAlgorithm):
         # Update learning rate according to schedule
         self._update_learning_rate([self.policy.optimizer])
 
-        losses, q_stds_for_all_batches, reward_scalings = [], [], []
+        losses, q_stds_for_all_batches, reward_scalings, rnd_losses = [], [], [], []
         for _ in range(gradient_steps):
             # Sample replay buffer
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)
@@ -263,8 +266,17 @@ class D_DRM(OffPolicyAlgorithm):
                         shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_q_stds, th.ones_like(q_stds_for_batch))
 
                     elif self.shaping_scaling_type == "rnd":
-                        print("RND not implemented yet")
-                        raise NotImplementedError
+                        target_rnd_vals = self.rnd_target(replay_data.observations)
+
+                        rnd_differences = th.abs(target_rnd_vals - self.rnd_learner(replay_data.observations))
+                        avg_rnd_differences = rnd_differences.mean().item()
+
+                        if avg_rnd_differences > self.max_avg_rnd_diff:
+                            self.max_avg_rnd_diff = avg_rnd_differences
+                        
+                        normalized_rnd_differences = rnd_differences/self.max_avg_rnd_diff
+
+                        shaping_reward_scaling = th.minimum(normalized_rnd_differences, th.ones_like(normalized_rnd_differences))
                     
                     elif self.shaping_scaling_type == "naive":
                         shaping_reward_scaling = self._current_progress_remaining*th.ones_like(q_stds_for_batch)
@@ -293,6 +305,17 @@ class D_DRM(OffPolicyAlgorithm):
             th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
             self.policy.optimizer.step()
 
+            if self.shaping_scaling_type == "rnd" and self.shaping_function != None:
+                #Compute RND loss
+                rnd_loss = F.mse_loss(self.rnd_learner(replay_data.observations), target_rnd_vals)
+                rnd_losses.append(rnd_loss.item())
+
+                #optimize the RND learner
+                self.rnd_learner.optimizer.zero_grad()
+                rnd_loss.backward()
+                th.nn.utils.clip_grad_norm_(self.rnd_learner.parameters(), self.max_grad_norm)
+                self.rnd_learner.optimizer.step()
+
         # Increase update counter
         self._n_updates += gradient_steps
 
@@ -302,7 +325,10 @@ class D_DRM(OffPolicyAlgorithm):
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/loss", np.mean(losses))
         self.logger.record("train/qstds", np.mean(q_stds_for_all_batches))
-        self.logger.record("train/max_qstds", self.max_q_stds)
+        if self.shaping_scaling_type == "rnd" and self.shaping_function != None: 
+            self.logger.record("train/max_avg_rnd_std", self.max_avg_rnd_diff)
+            self.logger.record("train/rnd_losses", np.mean(rnd_losses))
+        else: self.logger.record("train/max_qstds", self.max_q_stds)
 
         if self.shaping_function != None: self.logger.record("train/reward_scale", np.mean(reward_scalings))
 
