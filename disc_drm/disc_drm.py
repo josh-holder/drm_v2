@@ -147,7 +147,7 @@ class D_DRM(OffPolicyAlgorithm):
         self.shaping_function = shaping_function
         self.shaping_scaling_type = shaping_scaling_type
 
-        self.max_q_stds = 0.0001 #start at non-zero value to prevent divide by zero
+        self.max_avg_batch_q_stds = 0.0001 #start at non-zero value to prevent divide by zero
         self.max_avg_rnd_diff = 0.00001
 
         self.n_qnets = n_qnets
@@ -248,8 +248,8 @@ class D_DRM(OffPolicyAlgorithm):
                 avg_batch_q_diff = th.mean(q_stds_for_batch).item()
                 q_stds_for_all_batches.append(avg_batch_q_diff)
 
-                if avg_batch_q_diff > self.max_q_stds:
-                    self.max_q_stds = avg_batch_q_diff
+                if avg_batch_q_diff > self.max_avg_batch_q_stds:
+                    self.max_avg_batch_q_stds = avg_batch_q_diff
 
                 #################### Calculate appropriate reward shaping and scaling ################
                 if self.shaping_function != None:
@@ -263,7 +263,7 @@ class D_DRM(OffPolicyAlgorithm):
                         shaping_reward_scaling = th.minimum(shaping_reward_scaling, th.ones_like(shaping_reward_scaling))
 
                     elif self.shaping_scaling_type == "drm":
-                        shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_q_stds, th.ones_like(q_stds_for_batch))
+                        shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_avg_batch_q_stds, th.ones_like(q_stds_for_batch))
 
                     elif self.shaping_scaling_type == "rnd":
                         target_rnd_vals = self.rnd_target(replay_data.observations)
@@ -328,7 +328,7 @@ class D_DRM(OffPolicyAlgorithm):
         if self.shaping_scaling_type == "rnd" and self.shaping_function != None: 
             self.logger.record("train/max_avg_rnd_std", self.max_avg_rnd_diff)
             self.logger.record("train/rnd_losses", np.mean(rnd_losses))
-        else: self.logger.record("train/max_qstds", self.max_q_stds)
+        else: self.logger.record("train/max_qstds", self.max_avg_batch_q_stds)
 
         if self.shaping_function != None: self.logger.record("train/reward_scale", np.mean(reward_scalings))
 

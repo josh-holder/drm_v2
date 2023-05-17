@@ -13,6 +13,8 @@ from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedul
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from cont_drm.cont_drm_policies import C_DRMPolicy, CnnPolicy, MlpPolicy, MultiInputPolicy
 
+from scaling_functions.count_reward_scaling import countbased_reward_scaling
+
 SelfC_DRM = TypeVar("SelfC_DRM", bound="C_DRM")
 
 class C_DRM(OffPolicyAlgorithm):
@@ -125,7 +127,8 @@ class C_DRM(OffPolicyAlgorithm):
         self.shaping_function = shaping_function
         self.shaping_scaling_type = shaping_scaling_type
 
-        self.max_avg_batch_q_stds = 0
+        self.max_avg_batch_q_stds = 0.00001
+        self.max_avg_rnd_diff = 0.00001
 
         if _init_setup_model:
             self._setup_model()
@@ -145,6 +148,9 @@ class C_DRM(OffPolicyAlgorithm):
         self.critic = self.policy.critic
         self.critic_target = self.policy.critic_target
 
+        self.rnd_target = self.policy.rnd_target
+        self.rnd_learner = self.policy.rnd_learner
+
     def train(self, gradient_steps: int, batch_size: int = 100) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -152,7 +158,7 @@ class C_DRM(OffPolicyAlgorithm):
         # Update learning rate according to lr schedule
         self._update_learning_rate([self.actor.optimizer, self.critic.optimizer])
 
-        actor_losses, critic_losses = [], []
+        actor_losses, critic_losses, q_stds_for_all_batches, reward_scalings, rnd_losses = [], [], [], [], []
         for _ in range(gradient_steps):
             self._n_updates += 1
             # Sample replay buffer
@@ -171,7 +177,7 @@ class C_DRM(OffPolicyAlgorithm):
                 next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
 
                 m = 2
-                critic_indices_to_use = np.random.choice(self.critic.n_qnets, m, replace=False)
+                critic_indices_to_use = np.random.choice(self.critic.n_critics, m, replace=False)
 
                 # Compute the next Q-values: min over a random selection of m of the critics.
                 next_q_values = []
@@ -182,21 +188,51 @@ class C_DRM(OffPolicyAlgorithm):
                 next_q_values = th.cat(next_q_values, dim=1) #change tuple to single tensor
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 
-                if self.use_shaping:
-                    shaping_rewards = calc_shaping_rewards(replay_data.observations, replay_data.actions)
-                    if self.use_shaping_scaling:
-                        q_stds = th.std(single_tensor_current_q_values, dim=1)
-                        avg_batch_q_std = th.mean(q_stds).item()
-                        if avg_batch_q_std > self.max_avg_batch_q_stds:
-                            self.max_avg_batch_q_stds = avg_batch_q_std
+                q_stds_for_batch = th.std(single_tensor_current_q_values, dim=1)
+                avg_batch_q_std = th.mean(q_stds_for_batch).item()
+                q_stds_for_all_batches.append(avg_batch_q_std)
 
-                        shaping_reward_scaling = th.clip(q_stds/self.max_avg_batch_q_stds, 0, 1).unsqueeze(1) 
-                        shaped_rewards = replay_data.rewards + th.mul(shaping_reward_scaling,shaping_rewards)
-                    else: shaped_rewards = replay_data.rewards + shaping_rewards
-                else:
-                    shaped_rewards = replay_data.rewards
+                if avg_batch_q_std > self.max_avg_batch_q_stds:
+                    self.max_avg_batch_q_stds = avg_batch_q_std
 
-                target_q_values = shaped_rewards + (1 - replay_data.dones) * self.gamma * next_q_values
+                if self.shaping_function != None:
+                    shaping_rewards = self.shaping_function(replay_data.observations, replay_data.actions)
+
+                    if self.shaping_scaling_type == None:
+                        shaping_reward_scaling = th.ones_like(shaping_rewards,dtype=th.float16)
+
+                    elif self.shaping_scaling_type == "count":
+                        print("Count based reward shaping no meaningful in continuous setting - use RND instead.")
+                        raise NotImplementedError
+
+                    elif self.shaping_scaling_type == "drm":
+                        shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_avg_batch_q_stds, th.ones_like(q_stds_for_batch))
+
+                    elif self.shaping_scaling_type == "rnd":
+                        target_rnd_vals = self.rnd_target(replay_data.observations)
+
+                        rnd_differences = th.abs(target_rnd_vals - self.rnd_learner(replay_data.observations))
+                        avg_rnd_differences = rnd_differences.mean().item()
+
+                        if avg_rnd_differences > self.max_avg_rnd_diff:
+                            self.max_avg_rnd_diff = avg_rnd_differences
+                        
+                        normalized_rnd_differences = rnd_differences/self.max_avg_rnd_diff
+
+                        shaping_reward_scaling = th.minimum(normalized_rnd_differences, th.ones_like(normalized_rnd_differences))
+                    
+                    elif self.shaping_scaling_type == "naive":
+                        shaping_reward_scaling = self._current_progress_remaining*th.ones_like(q_stds_for_batch)
+                    
+                    reward_scalings.append(shaping_reward_scaling.mean().item())
+                    
+                    shaping_rewards = th.mul(shaping_rewards, shaping_reward_scaling)
+
+                else: #if no shaping function provided, just use the regular rewards
+                    shaping_reward_scaling = th.zeros_like(replay_data.rewards)
+                    shaping_rewards = th.zeros_like(replay_data.rewards)
+
+                target_q_values = replay_data.rewards + shaping_rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
             # Compute critic loss
             #F is torch functional
@@ -207,6 +243,17 @@ class C_DRM(OffPolicyAlgorithm):
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
             self.critic.optimizer.step()
+
+            #Compute RND loss
+            if self.shaping_scaling_type == "rnd" and self.shaping_function != None:
+                rnd_loss = F.mse_loss(self.rnd_learner(replay_data.observations), target_rnd_vals)
+                rnd_losses.append(rnd_loss.item())
+
+                #optimize the RND learner
+                self.rnd_learner.optimizer.zero_grad()
+                rnd_loss.backward()
+                # th.nn.utils.clip_grad_norm_(self.rnd_learner.parameters(), self.max_grad_norm)
+                self.rnd_learner.optimizer.step()
 
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
@@ -229,11 +276,13 @@ class C_DRM(OffPolicyAlgorithm):
         if len(actor_losses) > 0:
             self.logger.record("train/actor_loss", np.mean(actor_losses))
         self.logger.record("train/critic_loss", np.mean(critic_losses))
-        self.logger.record("train/q_var", th.mean(th.std(single_tensor_current_q_values, dim=1)).item())
-        if self.use_shaping and self.use_shaping_scaling:
-            self.logger.record("train/avg_reward_scale", th.mean(shaping_reward_scaling).item())
-            self.logger.record("train/max_avg_batch_q_stds", self.max_avg_batch_q_stds)
-        # self.logger.record("train/qs", th.mean(th.mean(single_tensor_current_q_values, dim=1)).item())
+        self.logger.record("train/qstds", np.mean(q_stds_for_all_batches))
+        if self.shaping_scaling_type == "rnd" and self.shaping_function != None: 
+            self.logger.record("train/max_avg_rnd_std", self.max_avg_rnd_diff)
+            self.logger.record("train/rnd_losses", np.mean(rnd_losses))
+        else: self.logger.record("train/max_qstds", self.max_avg_batch_q_stds)
+
+        if self.shaping_function != None: self.logger.record("train/reward_scale", np.mean(reward_scalings))
 
     def learn(
         self: SelfC_DRM,
