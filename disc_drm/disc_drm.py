@@ -19,6 +19,7 @@ from stable_baselines3.common.vec_env import VecEnv, VecNormalize
 from stable_baselines3.common.type_aliases import ReplayBufferSamples
 
 from scaling_functions.count_reward_scaling import countbased_reward_scaling
+from scaling_functions.rnd_reward_scaling import RunningMeanStd, RewardForwardFilter
 
 from collections import defaultdict
 
@@ -183,6 +184,19 @@ class D_DRM(OffPolicyAlgorithm):
                 )
 
             self.target_update_interval = max(self.target_update_interval // self.n_envs, 1)
+
+        if self.shaping_scaling_type == "rnd":
+            #Initialize RND data collection for observation normalization:
+            self.obs_rms = RunningMeanStd(shape=self.observation_space.shape)
+
+            starting_observations = []
+            self.env.reset()
+            for step in range(10000):
+                actions = np.array([self.action_space.sample() for _ in range(self.n_envs)])
+                
+                obs, rewards, dones, infos = self.env.step(actions)
+                
+                
 
     def _create_aliases(self) -> None:
         self.q_nets = self.policy.q_nets
