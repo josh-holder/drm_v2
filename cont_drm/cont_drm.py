@@ -6,14 +6,17 @@ from gym import spaces
 from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import ReplayBuffer
-from stable_baselines3.common.noise import ActionNoise
+from stable_baselines3.common.noise import ActionNoise, VectorizedActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
-from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
+from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, RolloutReturn, TrainFreq, TrainFrequencyUnit
+from stable_baselines3.common.utils import get_parameters_by_name, polyak_update,should_collect_more_steps
 from cont_drm.cont_drm_policies import C_DRMPolicy, CnnPolicy, MlpPolicy, MultiInputPolicy
+from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.callbacks import BaseCallback
 
 from scaling_functions.count_reward_scaling import countbased_reward_scaling
+from scaling_functions.rnd_reward_scaling import RunningMeanStd, RewardForwardFilter
 
 SelfC_DRM = TypeVar("SelfC_DRM", bound="C_DRM")
 
@@ -142,6 +145,23 @@ class C_DRM(OffPolicyAlgorithm):
         self.actor_batch_norm_stats_target = get_parameters_by_name(self.actor_target, ["running_"])
         self.critic_batch_norm_stats_target = get_parameters_by_name(self.critic_target, ["running_"])
 
+        if self.shaping_scaling_type == "rnd":
+            #Initialize RND data collection for observation normalization:
+            self.obs_rms = RunningMeanStd(shape=self.observation_space.shape)
+            self.int_rew_rms = RunningMeanStd(shape=(1,))
+
+            starting_observations = []
+            self.env.reset()
+            for step in range(10000):
+                actions = np.array([self.action_space.sample() for _ in range(self.n_envs)])
+                
+                obs, _, _, _ = self.env.step(actions)
+
+                starting_observations.append(obs)
+            
+            starting_observations = np.stack(starting_observations)
+            self.obs_rms.update(starting_observations)
+
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
         self.actor_target = self.policy.actor_target
@@ -209,9 +229,11 @@ class C_DRM(OffPolicyAlgorithm):
                         shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_avg_batch_q_stds, th.ones_like(q_stds_for_batch))
 
                     elif self.shaping_scaling_type == "rnd":
-                        target_rnd_vals = self.rnd_target(replay_data.observations)
+                        normalized_observations = th.clip((replay_data.observations-self.obs_rms.mean)/np.sqrt(self.obs_rms.var), -5, 5)
 
-                        rnd_differences = th.abs(target_rnd_vals - self.rnd_learner(replay_data.observations))
+                        target_rnd_vals = self.rnd_target(normalized_observations)
+
+                        rnd_differences = th.abs(target_rnd_vals - self.rnd_learner(normalized_observations))
                         avg_rnd_differences = rnd_differences.mean().item()
 
                         if avg_rnd_differences > self.max_avg_rnd_diff:
@@ -308,3 +330,111 @@ class C_DRM(OffPolicyAlgorithm):
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
         state_dicts = ["policy", "actor.optimizer", "critic.optimizer"]
         return state_dicts, []
+    
+    def collect_rollouts(
+        self,
+        env: VecEnv,
+        callback: BaseCallback,
+        train_freq: TrainFreq,
+        replay_buffer: ReplayBuffer,
+        action_noise: Optional[ActionNoise] = None,
+        learning_starts: int = 0,
+        log_interval: Optional[int] = None,
+    ) -> RolloutReturn:
+        """
+        Collect experiences and store them into a ``ReplayBuffer``.
+
+        :param env: The training environment
+        :param callback: Callback that will be called at each step
+            (and at the beginning and end of the rollout)
+        :param train_freq: How much experience to collect
+            by doing rollouts of current policy.
+            Either ``TrainFreq(<n>, TrainFrequencyUnit.STEP)``
+            or ``TrainFreq(<n>, TrainFrequencyUnit.EPISODE)``
+            with ``<n>`` being an integer greater than 0.
+        :param action_noise: Action noise that will be used for exploration
+            Required for deterministic policy (e.g. TD3). This can also be used
+            in addition to the stochastic policy for SAC.
+        :param learning_starts: Number of steps before learning for the warm-up phase.
+        :param replay_buffer:
+        :param log_interval: Log data every ``log_interval`` episodes
+        :return:
+        """
+        # Switch to eval mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(False)
+
+        num_collected_steps, num_collected_episodes = 0, 0
+
+        assert isinstance(env, VecEnv), "You must pass a VecEnv"
+        assert train_freq.frequency > 0, "Should at least collect one step or episode."
+
+        if env.num_envs > 1:
+            assert train_freq.unit == TrainFrequencyUnit.STEP, "You must use only one env when doing episodic training."
+
+        # Vectorize action noise if needed
+        if action_noise is not None and env.num_envs > 1 and not isinstance(action_noise, VectorizedActionNoise):
+            action_noise = VectorizedActionNoise(action_noise, env.num_envs)
+
+        if self.use_sde:
+            self.actor.reset_noise(env.num_envs)
+
+        callback.on_rollout_start()
+        continue_training = True
+
+        new_observations = []
+
+        while should_collect_more_steps(train_freq, num_collected_steps, num_collected_episodes):
+            if self.use_sde and self.sde_sample_freq > 0 and num_collected_steps % self.sde_sample_freq == 0:
+                # Sample a new noise matrix
+                self.actor.reset_noise(env.num_envs)
+
+            # Select action randomly or according to policy
+            actions, buffer_actions = self._sample_action(learning_starts, action_noise, env.num_envs)
+
+            # Rescale and perform action
+            new_obs, rewards, dones, infos = env.step(actions)
+
+            new_observations.append(new_obs)
+
+            self.num_timesteps += env.num_envs
+            num_collected_steps += 1
+
+            # Give access to local variables
+            callback.update_locals(locals())
+
+            # Only stop training if return value is False, not when it is None.
+            if callback.on_step() is False:
+                return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training=False)
+            # Retrieve reward and episode length if using Monitor wrapper
+            self._update_info_buffer(infos, dones)
+
+            # Store data in replay buffer (normalized action and unnormalized observation)
+            self._store_transition(replay_buffer, buffer_actions, new_obs, rewards, dones, infos)
+
+            self._update_current_progress_remaining(self.num_timesteps, self._total_timesteps)
+            
+            # For DQN, check if the target network should be updated
+            # and update the exploration schedule
+            # For SAC/TD3, the update is dones as the same time as the gradient update
+            # see https://github.com/hill-a/stable-baselines/issues/900
+            self._on_step()
+            for idx, done in enumerate(dones):
+                if done:
+                    # Update stats
+                    num_collected_episodes += 1
+                    self._episode_num += 1
+
+                    if action_noise is not None:
+                        kwargs = dict(indices=[idx]) if env.num_envs > 1 else {}
+                        action_noise.reset(**kwargs)
+
+                    # Log training infos
+                    if log_interval is not None and self._episode_num % log_interval == 0:
+                        self._dump_logs()
+        callback.on_rollout_end()
+
+        #If RND is active, update the running average of the observation
+        new_observations = np.stack(new_observations)
+        self.obs_rms.update(new_observations)
+
+        return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training)

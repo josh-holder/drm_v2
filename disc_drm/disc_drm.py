@@ -188,15 +188,19 @@ class D_DRM(OffPolicyAlgorithm):
         if self.shaping_scaling_type == "rnd":
             #Initialize RND data collection for observation normalization:
             self.obs_rms = RunningMeanStd(shape=self.observation_space.shape)
+            self.int_rew_rms = RunningMeanStd(shape=(1,))
 
             starting_observations = []
             self.env.reset()
             for step in range(10000):
                 actions = np.array([self.action_space.sample() for _ in range(self.n_envs)])
                 
-                obs, rewards, dones, infos = self.env.step(actions)
-                
-                
+                obs, _, _, _ = self.env.step(actions)
+
+                starting_observations.append(obs)
+            
+            starting_observations = np.stack(starting_observations)
+            self.obs_rms.update(starting_observations)
 
     def _create_aliases(self) -> None:
         self.q_nets = self.policy.q_nets
@@ -280,6 +284,7 @@ class D_DRM(OffPolicyAlgorithm):
                         shaping_reward_scaling = th.minimum(q_stds_for_batch/self.max_avg_batch_q_stds, th.ones_like(q_stds_for_batch))
 
                     elif self.shaping_scaling_type == "rnd":
+                        #Can't normalize inputs because we're in a discrete environment
                         target_rnd_vals = self.rnd_target(replay_data.observations)
 
                         rnd_differences = th.abs(target_rnd_vals - self.rnd_learner(replay_data.observations))
