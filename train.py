@@ -33,13 +33,13 @@ ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1"
 
 def setup_and_run_parser(parser):
     #~~~ ALGORITHM SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--algo", help="RL Algorithm", default="disc_drm", type=str, required=False, choices=list(FULL_ALGO_LIST.keys()))
+    parser.add_argument("--algo", help="RL Algorithm", default="cont_drm", type=str, required=False, choices=list(FULL_ALGO_LIST.keys()))
     parser.add_argument("--n-qnets",help="Number of Q-networks in ensemble", default=2, type=int)
     parser.add_argument("--scaling", help="Shaping scaling type", default=None, type=str, required=False, choices=SHAPING_SCALING_TYPES)
     parser.add_argument("--no-shaping", action="store_true", help="Flag determining whether to use reward shaping.", default=False)
 
     #~~~ RUN SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--env", type=str, default="FrozenLake-v1", help="environment ID")
+    parser.add_argument("--env", type=str, default="MountainCarContinuous-v0", help="environment ID")
 
     parser.add_argument("-n", "--n-timesteps", help="Overwrite the number of timesteps", default=-1, type=int)
     parser.add_argument("--seed", help="Random generator seed", type=int, default=-1)
@@ -67,7 +67,7 @@ def setup_and_run_parser(parser):
         default=False,
         help="if toggled, this experiment will be tracked with Weights and Biases",
     )
-    parser.add_argument("--wandb-project-name", type=str, default="Discrete DRM", help="the wandb's project name")
+    parser.add_argument("--wandb-project-name", type=str, default="DRM MtnCar", help="the wandb's project name")
     parser.add_argument("--wandb-run-name",type=str, default=None, help="the run name to be used in wandb")
 
     parser.add_argument("-f", "--log-folder", help="Log folder", type=str, default="logs")

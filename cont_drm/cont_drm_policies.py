@@ -197,9 +197,6 @@ class C_DRMPolicy(BasePolicy):
         #Create RND networks
         self.rnd_target = self.make_rnd_network(features_extractor=None)
         self.rnd_learner = self.make_rnd_network(features_extractor=None)
-        
-        for target_params, learner_params in zip(self.rnd_target.parameters(), self.rnd_learner.parameters()):
-            print(target_params-learner_params)
 
         self.rnd_learner.optimizer = self.optimizer_class(self.rnd_learner.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
         
