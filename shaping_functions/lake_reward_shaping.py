@@ -3,10 +3,10 @@ import torch as th
 def lake_reward_shaping(state, action):
     shaped_states = th.zeros_like(state)
 
-    push_right_states =  [105, 106, 107, 108, 109, 110, 111, 61, 62, 29, 30, 60, 77, 87, 94, 104]
-    push_up_states =  [112, 95, 78, 63, 46, 47, 80]
-    push_down_states =  [71, 88, 31, 12, 13, 14, 44, 89, 90, 91, 92, 93, 94]
-    push_left_states =  [32, 47, 64, 89]
+    push_right_states =  [62, 29, 30]
+    push_up_states =  [63, 46, 47, 80]
+    push_down_states =  [31, 12, 13, 14]
+    push_left_states =  [32, 47, 64]
 
     for push_right_state in push_right_states:
         push_right_rewards = th.where(th.logical_and(state==push_right_state,action==2), 1, 0)

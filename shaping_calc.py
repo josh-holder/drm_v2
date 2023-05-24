@@ -1,10 +1,18 @@
+# LAKE_DESC = ["FFHFFFFFFFFHFFFFF",
+#              "FFHFFFFFFFFHPPPFF",
+#              "FFHFFFHFFFFHPFGFF",
+#              "FFHFFFHFFFPPPFFFF",
+#              "FFFSFFHHFFPHFFFFF",
+#              "FHFPFFFFFFPHFFFFF",
+#              "FFFPPPPPPPPHFFFFF"]
+
 LAKE_DESC = ["FFHFFFFFFFFHFFFFF",
              "FFHFFFFFFFFHPPPFF",
              "FFHFFFHFFFFHPFGFF",
-             "FFHFFFHFFFPPPFFFF",
-             "FFFSFFHHFFPHFFFFF",
-             "FHFPFFFFFFPHFFFFF",
-             "FFFPPPPPPPPHFFFFF"]
+             "FFHFFFHFFFFSPFFFF",
+             "FFFFFFHHFFFHFFFFF",
+             "FHFFFFFFFFFHFFFFF",
+             "FFFFFFFFFFFHFFFFF"]
 
 num_rows = len(LAKE_DESC)
 num_cols = len(LAKE_DESC[0])

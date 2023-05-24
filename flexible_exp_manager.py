@@ -309,10 +309,23 @@ class LakeRewardWrapper(gym.Wrapper):
         last_state = self.env.env.s
         obs, reward, done, info = self.env.step(action)
         reward += self.negative_step_reward
+        
+        gate_state = 62
+
         if obs in self.hole_list:
             reward += self.negative_hole_reward
             done = False
             obs = last_state
             self.env.env.s = last_state
+        elif obs == gate_state and action == 2:
+            print("\nreached gate")
+            rand_num = np.random.rand()
+
+            if rand_num < 0.75:
+                reward -= 0.01425
+                obs = gate_state
+                self.env.env.s = gate_state
+            else:
+                pass
 
         return obs, reward, done, info
