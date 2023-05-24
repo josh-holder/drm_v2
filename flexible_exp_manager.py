@@ -318,7 +318,6 @@ class LakeRewardWrapper(gym.Wrapper):
             obs = last_state
             self.env.env.s = last_state
         elif obs == gate_state and action == 2:
-            print("\nreached gate")
             rand_num = np.random.rand()
 
             if rand_num < 0.75:
