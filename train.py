@@ -33,13 +33,13 @@ ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1"
 
 def setup_and_run_parser(parser):
     #~~~ ALGORITHM SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--algo", help="RL Algorithm", default="cont_drm", type=str, required=False, choices=list(FULL_ALGO_LIST.keys()))
+    parser.add_argument("--algo", help="RL Algorithm", default="disc_drm", type=str, required=False, choices=list(FULL_ALGO_LIST.keys()))
     parser.add_argument("--n-qnets",help="Number of Q-networks in ensemble", default=2, type=int)
     parser.add_argument("--scaling", help="Shaping scaling type", default=None, type=str, required=False, choices=SHAPING_SCALING_TYPES)
     parser.add_argument("--no-shaping", action="store_true", help="Flag determining whether to use reward shaping.", default=False)
 
     #~~~ RUN SPECIFIC ARGUMENTS ~~~#
-    parser.add_argument("--env", type=str, default="MountainCarContinuous-v0", help="environment ID")
+    parser.add_argument("--env", type=str, default="FrozenLake-v1", help="environment ID")
 
     parser.add_argument("-n", "--n-timesteps", help="Overwrite the number of timesteps", default=-1, type=int)
     parser.add_argument("--seed", help="Random generator seed", type=int, default=-1)
@@ -94,6 +94,9 @@ def train() -> None:
 
     #~~~~~~~~~ SETUP ENVIRONMENT, SEED, UUID ~~~~~~~~~#
     args, env_id, uuid_str = env_seed_uuid_setup(args)
+
+    lake_desc = gym.envs.toy_text.frozen_lake.generate_random_map(size=4)
+    print(lake_desc)
 
     #~~~~~~~~~ SETUP REWARD SHAPING ~~~~~~~~~#
     if args.no_shaping: shaping_function = None
