@@ -25,14 +25,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Type
 import numpy as np
 import gym
 
-LAKE_DESC = ["FFHFFFFFFFFHFFFFF",
-             "FFHFFFFFFFFHFFFFF",
-             "FFHFFFHFFFFHFFGFF",
-             "FFHFFFHFFFFFFFFFF",
-             "FFFSFFHHFFFHFFFFF",
-             "FHFFFFFFFFFHFFFFF",
-             "FFFFFFFFFFFHFFFFF"]
-
 class FlexibleExperimentManager(ExperimentManager):
     """
     Experiment Manager, but with the capability to easily add new algorithms to the list of available algorithms.
@@ -139,7 +131,7 @@ class FlexibleExperimentManager(ExperimentManager):
         env = self.create_envs(n_envs, no_log=False)
 
         if self.env_name == "FrozenLake-v1":
-            env = gym.make("FrozenLake-v1", desc=LAKE_DESC, is_slippery=False)
+            env = gym.make("FrozenLake-v1", is_slippery=False, **self.env_kwargs)
             env = LakeRewardWrapper(env, -0.01, 0)
 
         self._hyperparams = self._preprocess_action_noise(hyperparams, saved_hyperparams, env)
@@ -216,7 +208,7 @@ class FlexibleExperimentManager(ExperimentManager):
         env = self.create_envs(n_envs, no_log=True)
 
         if self.env_name == "FrozenLake-v1":
-            env = gym.make("FrozenLake-v1", desc=LAKE_DESC, is_slippery=False)
+            env = gym.make("FrozenLake-v1", is_slippery=False, **self.env_kwargs)
             env = LakeRewardWrapper(env, -0.01, 0)
 
         # By default, do not activate verbose output to keep

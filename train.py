@@ -5,13 +5,14 @@ import numpy as np
 import stable_baselines3 as sb3
 import torch as th
 
-from flexible_exp_manager import FlexibleExperimentManager, LakeRewardWrapper, LAKE_DESC
+from flexible_exp_manager import FlexibleExperimentManager, LakeRewardWrapper
 from rl_zoo3.utils import ALGOS, StoreDict
 from cont_drm.cont_drm import C_DRM
 from disc_drm.disc_drm import D_DRM
 
 import os
 import gym
+from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 
 from stable_baselines3.common.vec_env import VecVideoRecorder, DummyVecEnv
 
@@ -95,8 +96,9 @@ def train() -> None:
     #~~~~~~~~~ SETUP ENVIRONMENT, SEED, UUID ~~~~~~~~~#
     args, env_id, uuid_str = env_seed_uuid_setup(args)
 
-    lake_desc = gym.envs.toy_text.frozen_lake.generate_random_map(size=4)
-    print(lake_desc)
+    if args.env == "FrozenLake-v1":
+        if args.env_kwargs == None: args.env_kwargs = {}
+        args.env_kwargs["desc"] = generate_random_map(size=16)
 
     #~~~~~~~~~ SETUP REWARD SHAPING ~~~~~~~~~#
     if args.no_shaping: shaping_function = None
@@ -195,7 +197,7 @@ def train() -> None:
         os.makedirs(vid_folder, exist_ok=True)
         video_length = 100
 
-        vec_env = DummyVecEnv([lambda: LakeRewardWrapper(gym.make(env_id,desc=LAKE_DESC,is_slippery=False),-0.01,0)])
+        vec_env = DummyVecEnv([lambda: LakeRewardWrapper(gym.make(env_id,is_slippery=False, **args.env_kwargs),-0.01,0)])
 
         # Record the video starting at the first step
         vec_env = VecVideoRecorder(vec_env, vid_folder,
