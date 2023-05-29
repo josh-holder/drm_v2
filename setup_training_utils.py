@@ -138,6 +138,13 @@ def env_seed_uuid_setup(args):
         importlib.import_module(env_module)
 
     env_id = args.env
+
+    gym.envs.register(
+            id='VisualMaze-v1',
+            entry_point='custom_environments:VisualMazeEnv',
+            max_episode_steps=100,
+        )
+
     registered_envs = set(gym.envs.registry.env_specs.keys())  # pytype: disable=module-attr
 
     if args.yaml_file is not None:
