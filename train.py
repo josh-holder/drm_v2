@@ -29,7 +29,7 @@ FULL_ALGO_LIST["cont_drm"] = C_DRM
 FULL_ALGO_LIST["disc_drm"] = D_DRM
 
 SHAPING_SCALING_TYPES = ["count", "drm", "naive", "rnd"]
-ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1":lake_reward_shaping, \
+ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1":None, \
                          "LunarLander-v2":lander_reward_shaping, "MountainCarContinuous-v0":car_reward_shaping}
 
 def setup_and_run_parser(parser):
@@ -98,7 +98,7 @@ def train() -> None:
 
     if args.env == "FrozenLake-v1":
         if args.env_kwargs == None: args.env_kwargs = {}
-        args.env_kwargs["desc"] = generate_random_map(size=16)
+        args.env_kwargs["desc"] = generate_random_map(size=16,p=0.8) #0.8% chance block is frozen
 
     #~~~~~~~~~ SETUP REWARD SHAPING ~~~~~~~~~#
     if args.no_shaping: shaping_function = None

@@ -102,7 +102,7 @@ CliffWalking-v0:
 
 FrozenLake-v1:
   n_timesteps: 10000
-  policy: 'MlpPolicy'
+  policy: 'CnnPolicy'
   learning_rate: !!float 6.3e-4
   batch_size: 128
   buffer_size: 5000
