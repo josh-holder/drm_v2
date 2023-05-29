@@ -16,6 +16,8 @@ from stable_baselines3.common.torch_layers import (
 from stable_baselines3.common.type_aliases import Schedule
 import time
 
+from custom_environments.visual_maze_env import VisualMazeCNN
+
 class ContinuousRNDNetwork(BaseModel):
     """
     RND Networks for DRM.
@@ -92,6 +94,7 @@ class QNetwork(BasePolicy):
         self.activation_fn = activation_fn
         self.features_extractor = features_extractor
         self.features_dim = features_dim
+        print(features_dim)
         action_dim = self.action_space.n  # number of actions
 
         self.n_qnets = n_qnets
@@ -181,11 +184,11 @@ class D_DRMPolicy(BasePolicy):
             normalize_images=normalize_images,
         )
 
-        if net_arch is None:
-            if features_extractor_class == NatureCNN:
-                net_arch = []
-            else:
-                net_arch = [64, 64]
+        # if net_arch is None:
+        #     if features_extractor_class == NatureCNN:
+        #         net_arch = []
+        #     else:
+        #         net_arch = [64, 64]
 
         self.net_arch = net_arch
         self.activation_fn = activation_fn
@@ -358,7 +361,7 @@ class CnnPolicy(D_DRMPolicy):
         lr_schedule: Schedule,
         net_arch: Optional[List[int]] = None,
         activation_fn: Type[nn.Module] = nn.ReLU,
-        features_extractor_class: Type[BaseFeaturesExtractor] = NatureCNN,
+        features_extractor_class: Type[BaseFeaturesExtractor] = VisualMazeCNN,
         features_extractor_kwargs: Optional[Dict[str, Any]] = None,
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,

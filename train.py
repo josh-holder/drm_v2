@@ -6,7 +6,7 @@ import stable_baselines3 as sb3
 import torch as th
 
 from flexible_exp_manager import FlexibleExperimentManager, LakeRewardWrapper
-from rl_zoo3.utils import ALGOS, StoreDict
+from rl_zoo3.utils import ALGOS, StoreDict, get_latest_run_id
 from cont_drm.cont_drm import C_DRM
 from disc_drm.disc_drm import D_DRM
 
@@ -192,28 +192,23 @@ def train() -> None:
     else:
         exp_manager.hyperparameters_optimization()
 
-    #SAVE VIDEOS (only for discrete environments)
+    #SAVE "VIDEOS" (only for discrete environments)
     if args.video and args.algo == "disc_drm":
-        vid_folder = os.path.join(args.log_folder, "videos")
-        os.makedirs(vid_folder, exist_ok=True)
-        video_length = 100
+        save_path = os.path.join(
+            "videos", f"{args.wandb_run_name}_vid.txt")
 
-        vec_env = DummyVecEnv([lambda: LakeRewardWrapper(gym.make(env_id,is_slippery=False, **args.env_kwargs),-0.01,0)])
+        env = gym.make(env_id,**args.env_kwargs)
+        
+        with open(save_path, 'a') as f:
+            f.writelines("Start of video\n")
+            obs = env.reset()
+            done = False
+            while not done:
+                f.writelines(env.render())
+                action = model.policy.predict(obs)        
+                obs, _, done, _ = env.step(action[0])
 
-        # Record the video starting at the first step
-        vec_env = VecVideoRecorder(vec_env, vid_folder,
-                            record_video_trigger=lambda x: x == 0, video_length=video_length,
-                            name_prefix=f"{args.wandb_run_name}_vid")
-
-        obs = vec_env.reset() 
-
-
-        vec_env.reset()
-        for _ in range(video_length + 1):
-            action = model.policy.predict(obs)
-            obs, _, _, _ = vec_env.step(action[0])
-        # Save the video
-        vec_env.close()
-
+                f.writelines(f"Action: {action[0]}\n\n")
+                 
 if __name__ == "__main__":
     train()

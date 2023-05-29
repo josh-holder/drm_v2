@@ -131,7 +131,6 @@ class D_DRM(OffPolicyAlgorithm):
             supported_action_spaces=(spaces.Discrete,),
             support_multi_env=True,
         )
-
         self.exploration_initial_eps = exploration_initial_eps
         self.exploration_final_eps = exploration_final_eps
         self.exploration_fraction = exploration_fraction
@@ -471,7 +470,8 @@ class D_DRM(OffPolicyAlgorithm):
             # Select action randomly or according to policy
             actions, buffer_actions = self._sample_action(learning_starts, action_noise, env.num_envs)
 
-            self.state_counts[(self._last_obs[0],actions[0])] += 1 #grab the only element from the numpy array
+            # In the image environment, there's not a meaningful concept of state counts
+            # self.state_counts[(self._last_obs[0],actions[0])] += 1 #grab the only element from the numpy array
 
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)

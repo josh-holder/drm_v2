@@ -11,6 +11,10 @@ from gym import Env, logger, spaces, utils
 
 from stable_baselines3.common.env_checker import check_env
 
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch import nn
+import torch as th
+
 # Maze environment, heavily inspired by FrozenLake, but with images as the observation space,
 # and accordingly the use of numbers rather than characters.
 
@@ -67,6 +71,8 @@ def generate_random_map(size: int = 8, p: float = 0.8) -> np.ndarray:
         #generate a random position for the start and the goal
         start_index = np.random.randint(0, size, 2)
         goal_index = np.random.randint(0, size, 2)
+        while (goal_index==start_index).all(): #if goal_index is the same as start_index, repick
+            goal_index = np.random.randint(0, size, 2)
 
         #initialize start and goal positions
         board[start_index[0], start_index[1]] = 3
@@ -75,7 +81,7 @@ def generate_random_map(size: int = 8, p: float = 0.8) -> np.ndarray:
     return board
 
 class VisualMazeEnv(Env):
-    metadata = {'render.modes': ['human']}
+    metadata = {'render.modes': ['human','rgb_array']}
 
     def __init__(self, 
                 size=8,
@@ -165,7 +171,7 @@ class VisualMazeEnv(Env):
 
         return 85*self.board
     
-    def render(self):
+    def render(self, mode="human"):
         board = self.board[:,:,0].tolist()
         outfile = StringIO()
 
@@ -197,3 +203,45 @@ if __name__ == "__main__":
 
         obs, r, done, info = env.step(int(a))
         print(env.render())
+
+class VisualMazeCNN(BaseFeaturesExtractor):
+    """
+    CNN design for 8x8 to 16x16 maze environments.
+
+    :param observation_space:
+    :param features_dim: Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    :param normalized_image: Whether to assume that the image is already normalized
+        or not (this disables dtype and bounds checks): when True, it only checks that
+        the space is a Box and has 3 dimensions.
+        Otherwise, it checks that it has expected dtype (uint8) and bounds (values in [0, 255]).
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Box,
+        features_dim: int = 32,
+        normalized_image: bool = False,
+    ) -> None:
+        super().__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        n_input_channels = observation_space.shape[0]
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 16, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(16, 4, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            # nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=0),
+            # nn.ReLU(),
+            nn.Flatten(),
+        )
+
+        # Compute shape by doing one forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
+
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        return self.linear(self.cnn(observations))
