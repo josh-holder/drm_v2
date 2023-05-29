@@ -220,7 +220,7 @@ class VisualMazeCNN(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: spaces.Box,
-        features_dim: int = 32,
+        features_dim: int = 64,
         normalized_image: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim)
@@ -228,7 +228,7 @@ class VisualMazeCNN(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 16, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(n_input_channels, 16, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Conv2d(16, 4, kernel_size=3, stride=1, padding=0),
             nn.ReLU(),
