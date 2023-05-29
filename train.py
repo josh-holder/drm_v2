@@ -69,7 +69,7 @@ def setup_and_run_parser(parser):
         default=False,
         help="if toggled, this experiment will be tracked with Weights and Biases",
     )
-    parser.add_argument("--wandb-project-name", type=str, default="DRM MtnCar", help="the wandb's project name")
+    parser.add_argument("--wandb-project-name", type=str, default="VisualMaze", help="the wandb's project name")
     parser.add_argument("--wandb-run-name",type=str, default=None, help="the run name to be used in wandb")
 
     parser.add_argument("-f", "--log-folder", help="Log folder", type=str, default="logs")
