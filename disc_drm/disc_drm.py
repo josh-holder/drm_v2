@@ -25,6 +25,8 @@ from collections import defaultdict
 
 SelfD_DRM = TypeVar("SelfD_DRM", bound="D_DRM")
 
+from shaping_functions.maze_reward_shaping import maze_reward_shaping
+
 class D_DRM(OffPolicyAlgorithm):
     """
     Deep Q-Network (DQN)
@@ -462,6 +464,8 @@ class D_DRM(OffPolicyAlgorithm):
 
         self.q_net_index_to_use = np.random.choice(self.n_qnets)
 
+        # new_obs = env.reset()
+
         while should_collect_more_steps(train_freq, num_collected_steps, num_collected_episodes):
             if self.use_sde and self.sde_sample_freq > 0 and num_collected_steps % self.sde_sample_freq == 0:
                 # Sample a new noise matrix
@@ -473,8 +477,22 @@ class D_DRM(OffPolicyAlgorithm):
             # In the image environment, there's not a meaningful concept of state counts
             # self.state_counts[(self._last_obs[0],actions[0])] += 1 #grab the only element from the numpy array
 
+            # print("Old observation:")
+            # print(new_obs)
+            # print("~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+            # print("Old observation:")
+            # print(new_obs)
+
+            # print(f"action: {actions}")
+            # reward_shaping = maze_reward_shaping(th.from_numpy(new_obs), th.from_numpy(actions), verbose=True)
+            # print(f"Reward shaping would be {reward_shaping}")
+
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
+
+            # print("New observation:")
+            # print(new_obs.shape)
+            # print(new_obs)
 
             self.num_timesteps += env.num_envs
             num_collected_steps += 1

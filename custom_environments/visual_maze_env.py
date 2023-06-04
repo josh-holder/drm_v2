@@ -85,7 +85,7 @@ class VisualMazeEnv(Env):
 
     def __init__(self, 
                 size=8,
-                prob_of_path=0.8,
+                prob_of_path=1.0,
                 board=None,
                 ):
         

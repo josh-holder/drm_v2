@@ -10,7 +10,7 @@ DOWN = 1
 RIGHT = 2
 UP = 3
 
-def maze_reward_shaping(state, action):
+def maze_reward_shaping(state, action, verbose=False):
     """
     Reward shaping based on Manhattan distance.
 
@@ -27,23 +27,31 @@ def maze_reward_shaping(state, action):
     goal_locations = th.vstack(th.where(state==GOAL)[2:])
     goal_locations = th.transpose(goal_locations, 0, 1)
 
+    if verbose:
+        print(f"Player locations: {player_locations}")
+        print(f"Goal locations: {goal_locations}")
+
     go_down = th.where(goal_locations[:,0]>player_locations[:,0],1,0) #1 if you should go right, 0 if you shouldn't
     go_up = th.where(goal_locations[:,0]<player_locations[:,0],1,0)
     go_left = th.where(goal_locations[:,1]<player_locations[:,1],1,0)
     go_right = th.where(goal_locations[:,1]>player_locations[:,1],1,0)
+
+    if verbose: print(f"Go down: {go_down}, Go up: {go_up}, Go left: {go_left}, Go right: {go_right}")
 
     right_rewards = th.where(action==RIGHT, go_right, 0)
     left_rewards = th.where(action==LEFT, go_left, 0)
     up_rewards = th.where(action==UP, go_up, 0)
     down_rewards = th.where(action==DOWN, go_down, 0)
 
+    # print(f"Right rewards: {right_rewards}, Left rewards: {left_rewards}, Up rewards: {up_rewards}, Down rewards: {down_rewards}")
+
     rewards = right_rewards + left_rewards + up_rewards + down_rewards
 
-    for i, reward in enumerate(rewards[0:10]):
-        print(state[i,:,:,:])
-        print(f"Action: {action[i]}")
-        print(f"Reward: {reward}")
+    # for i, reward in enumerate(rewards[0:10]):
+    #     print(state[i,:,:,:])
+    #     print(f"Action: {action[i]}")
+    #     print(f"Reward: {reward}")
         
-    reward_scale = 0.005 #negative step reward is -0.01, so this is 1.5x that
+    reward_scale = 0.005 #negative step reward is -0.01, so this is 0.5x that
 
     return reward_scale*rewards.unsqueeze(1) #return a (batch_size,1) tensor instead of a (batch_size,) tensor
