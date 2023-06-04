@@ -18,10 +18,10 @@ import torch as th
 # Maze environment, heavily inspired by FrozenLake, but with images as the observation space,
 # and accordingly the use of numbers rather than characters.
 
-# 0 = path,
-# 1 = wall.
-# 2 = goal.
-# 3 = start/player.
+# 0 = path, (0)
+# 1 = wall. (85)
+# 2 = goal. (170)
+# 3 = start/player. (255)
 
 LEFT = 0
 DOWN = 1
@@ -228,10 +228,10 @@ class VisualMazeCNN(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(16, 4, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
+            # nn.Conv2d(n_input_channels, 16, kernel_size=3, stride=1, padding=1),
+            # nn.ReLU(),
+            # nn.Conv2d(16, 4, kernel_size=3, stride=1, padding=0),
+            # nn.ReLU(),
             # nn.Conv2d(4, 4, kernel_size=3, stride=1, padding=0),
             # nn.ReLU(),
             nn.Flatten(),

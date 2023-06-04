@@ -94,7 +94,6 @@ class QNetwork(BasePolicy):
         self.activation_fn = activation_fn
         self.features_extractor = features_extractor
         self.features_dim = features_dim
-        print(features_dim)
         action_dim = self.action_space.n  # number of actions
 
         self.n_qnets = n_qnets

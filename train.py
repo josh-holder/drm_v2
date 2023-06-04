@@ -22,6 +22,7 @@ from shaping_functions.car_reward_shaping import car_reward_shaping
 from shaping_functions.lunar_lander_reward_shaping import lander_reward_shaping
 from shaping_functions.lake_reward_shaping import lake_reward_shaping
 from shaping_functions.cliff_reward_shaping import cliff_reward_shaping
+from shaping_functions.maze_reward_shaping import maze_reward_shaping
 
 #Create new algorithm list which includes DRM
 FULL_ALGO_LIST = ALGOS
@@ -31,7 +32,7 @@ FULL_ALGO_LIST["disc_drm"] = D_DRM
 SHAPING_SCALING_TYPES = ["count", "drm", "naive", "rnd"]
 ENV_SHAPING_FUNCTIONS = {"CliffWalking-v0":cliff_reward_shaping, "FrozenLake-v1":lake_reward_shaping, \
                          "LunarLander-v2":lander_reward_shaping, "MountainCarContinuous-v0":car_reward_shaping, \
-                            "VisualMaze-v1":None}
+                            "VisualMaze-v1":maze_reward_shaping}
 
 def setup_and_run_parser(parser):
     #~~~ ALGORITHM SPECIFIC ARGUMENTS ~~~#

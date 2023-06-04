@@ -102,7 +102,7 @@ CliffWalking-v0:
 
 FrozenLake-v1:
   n_timesteps: 10000
-  policy: 'CnnPolicy'
+  policy: 'MlpPolicy'
   learning_rate: !!float 6.3e-4
   batch_size: 128
   buffer_size: 5000
@@ -119,19 +119,19 @@ FrozenLake-v1:
   count_temp: 1
 
 VisualMaze-v1:
-  n_timesteps: 10000
+  n_timesteps: 50000
   policy: 'CnnPolicy'
   learning_rate: !!float 6.3e-4
   batch_size: 128
-  buffer_size: 5000
+  buffer_size: 25000
   learning_starts: 0
   shaping_starts: 0
   gamma: 0.99
   target_update_interval: 50
   train_freq: 4
   gradient_steps: -1
-  exploration_fraction: 0.12
+  exploration_fraction: 0.5
   exploration_final_eps: 0.1
-  policy_kwargs: "dict(net_arch=[256, 256])"
+  policy_kwargs: "dict(net_arch=[400, 300])"
   tau: 0.5
   count_temp: 1
